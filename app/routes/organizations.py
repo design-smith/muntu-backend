@@ -6,6 +6,7 @@ from ..database import db
 from datetime import datetime
 from typing import Dict
 from bson import ObjectId
+from ..models.user import UserCreate
 
 router = APIRouter()
 
@@ -56,41 +57,85 @@ async def get_current_organization(current_user: dict = Depends(get_current_user
 @router.post("/")
 async def create_organization(org_data: dict, current_user: dict = Depends(get_current_user)):
     try:
+        print(f"Received organization data: {org_data}")
+        print(f"Current user: {current_user}")
+        
+        # Validate required fields
+        required_fields = ["name", "industry", "business_type", "size"]
+        missing_fields = [field for field in required_fields if not org_data.get(field)]
+        if missing_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required fields: {', '.join(missing_fields)}"
+            )
+
         # Check if user already has an organization
         existing_org = await db.organizations.find_one({"owner_id": current_user["_id"]})
         if existing_org:
+            print(f"User already has organization: {existing_org}")
             raise HTTPException(
                 status_code=400,
                 detail="User already has an organization"
             )
 
-        # Create organization
+        # Create organization with current timestamp
+        now = datetime.utcnow()
         organization = {
             "name": org_data["name"],
-            "industry": org_data.get("industry", ""),
-            "business_type": org_data.get("business_type", ""),
-            "size": org_data.get("size", ""),
+            "industry": org_data["industry"],
+            "business_type": org_data["business_type"],
+            "size": org_data["size"],
             "website": org_data.get("website", ""),
             "phone": org_data.get("phone", ""),
             "address": org_data.get("address", ""),
             "description": org_data.get("description", ""),
             "socials": org_data.get("socials", []),
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
+            "created_at": now,
+            "updated_at": now,
             "owner_id": current_user["_id"]
         }
+        
+        print(f"Attempting to create organization: {organization}")
 
-        # Insert organization
-        result = await db.organizations.insert_one(organization)
-        organization_id = str(result.inserted_id)
+        try:
+            # Insert organization
+            result = await db.organizations.insert_one(organization)
+            organization_id = str(result.inserted_id)
+            print(f"Organization created successfully with ID: {organization_id}")
 
-        return {
-            "id": organization_id,
-            "message": "Organization created successfully"
-        }
+            # Return the created organization in the same format as get_current_organization
+            return {
+                "organization": {
+                    "id": organization_id,
+                    "name": organization["name"],
+                    "industry": organization["industry"],
+                    "business_type": organization["business_type"],
+                    "size": organization["size"],
+                    "website": organization["website"],
+                    "phone": organization["phone"],
+                    "address": organization["address"],
+                    "description": organization["description"],
+                    "socials": organization["socials"],
+                    "created_at": organization["created_at"],
+                    "updated_at": organization["updated_at"]
+                },
+                "needs_onboarding": False
+            }
+        except Exception as db_error:
+            print(f"Database error: {str(db_error)}")
+            print(f"Error type: {type(db_error)}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=f"Database error: {str(db_error)}")
 
+    except HTTPException as he:
+        # Re-raise HTTP exceptions
+        raise he
     except Exception as e:
         print(f"Error creating organization: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/current")

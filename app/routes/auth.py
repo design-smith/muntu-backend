@@ -13,8 +13,6 @@ router = APIRouter()
 @router.post("/signup")
 async def signup(user_data: UserCreate):
     try:
-        print(f"Received signup data: {user_data}")  # Debug print
-        
         # Check if user exists
         existing_user = await db.users.find_one({"email": user_data.email})
         if existing_user:
@@ -44,24 +42,12 @@ async def signup(user_data: UserCreate):
             }
         }
         
-        print(f"Attempting to insert user: {user['email']}")  # Debug print
-        
         # Insert into database
-        try:
-            result = await db.users.insert_one(user)
-            user_id = str(result.inserted_id)
-            print(f"User created with ID: {user_id}")  # Debug print
-        except Exception as db_error:
-            print(f"Database error during user creation: {str(db_error)}")
-            raise HTTPException(status_code=500, detail=f"Database error: {str(db_error)}")
+        result = await db.users.insert_one(user)
+        user_id = str(result.inserted_id)
         
         # Create access token
-        try:
-            access_token = create_access_token(user_id)
-            print(f"Access token created successfully")  # Debug print
-        except Exception as token_error:
-            print(f"Token creation error: {str(token_error)}")
-            raise HTTPException(status_code=500, detail=f"Token creation error: {str(token_error)}")
+        access_token = create_access_token(user_id)
         
         # Return response
         return {
@@ -74,17 +60,8 @@ async def signup(user_data: UserCreate):
                 "last_name": user["last_name"]
             }
         }
-    except ValidationError as ve:
-        print(f"Validation error during signup: {str(ve)}")
-        raise HTTPException(status_code=422, detail=str(ve))
-    except HTTPException as he:
-        print(f"HTTP error during signup: {str(he)}")
-        raise he
     except Exception as e:
-        print(f"Unexpected error during signup: {str(e)}")
-        print(f"Error type: {type(e)}")
-        import traceback
-        print(f"Traceback: {traceback.format_exc()}")
+        print(f"Signup error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/login")
